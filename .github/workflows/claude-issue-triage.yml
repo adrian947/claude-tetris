@@ -1,0 +1,57 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          prompt: |
+            Analyze issue #${{ github.event.issue.number }} in this repository.
+
+            This is a vanilla JS Tetris game (index.html + style.css + game.js,
+            no build step, no dependencies). See CLAUDE.md for the architecture:
+            board model, pieces/rotation, collision, game loop, scoring/leveling,
+            rendering, and input handling all live in game.js as module-level state.
+
+            1. Read the issue title and body with `gh issue view ${{ github.event.issue.number }}`.
+            2. Pick the most appropriate label(s) from this repo's existing set only
+               (do not create new labels): bug, enhancement, question, documentation,
+               invalid, duplicate, good first issue, help wanted, wontfix.
+               Apply them with `gh issue edit ${{ github.event.issue.number }} --add-label "..."`.
+               If the issue already has labels that no longer fit, leave them — do not remove labels.
+            3. Post one diagnostic comment with
+               `gh issue comment ${{ github.event.issue.number }} --body "..."` that:
+               - States which part(s) of game.js are most likely involved (e.g. collide,
+                 rotateCW/tryRotate, loop/lockPiece, draw/drawNext, scoring, input handling).
+               - Gives a short root-cause hypothesis or clarification needed.
+               - Proposes a high-level approach to fix/implement it, without writing the
+                 actual code — this is a diagnosis to prepare a future implementation pass.
+               If this is an edit to an issue already triaged, only post a new comment if
+               the diagnosis materially changes; avoid duplicate near-identical comments.
+
+          claude_args: '--allowed-tools "Bash(gh issue:*)"'
+
+          # Optional: restrict to issues without a certain label already applied
+          # if: "!contains(github.event.issue.labels.*.name, 'triaged')"
+
+          # Optional: only re-run on edits to the original issue body, not every metadata change
+          # if: github.event.action == 'opened' || github.event.changes.body
