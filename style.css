@@ -223,3 +223,14 @@ kbd {
 #restart-btn:hover {
   background: var(--restart-hover);
 }
+
+/* ---- Version tag ---- */
+.version {
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  font-size: 11px;
+  color: var(--label-color);
+  letter-spacing: 0.5px;
+  font-family: 'Courier New', Courier, monospace;
+}
