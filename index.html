@@ -43,6 +43,16 @@
         </div>
 
         <div class="panel-section">
+          <span class="label">TOP 5</span>
+          <ol id="highscore-list" class="highscore-list"></ol>
+          <div class="highscore-stats">
+            <span>Mejor combo: <strong id="best-combo-ever">0</strong></span>
+            <span>Máx. líneas: <strong id="max-lines-ever">0</strong></span>
+          </div>
+          <button id="reset-highscores-btn" type="button">Resetear récords</button>
+        </div>
+
+        <div class="panel-section">
           <button id="theme-toggle" type="button">🌙 Oscuro</button>
         </div>
       </aside>
@@ -52,6 +62,15 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+
+        <div id="overlay-highscore-entry" class="hidden">
+          <p class="highscore-qualify-msg">¡Nueva puntuación entre las mejores!</p>
+          <input id="player-name-input" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" />
+          <button id="submit-score-btn" type="button">Guardar</button>
+        </div>
+
+        <ol id="overlay-highscore-list" class="highscore-list hidden"></ol>
+
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>
