@@ -15,6 +15,33 @@ const COLORS = [
   '#ffb74d', // L - orange
 ];
 
+const SKIN_PALETTES = {
+  retro: COLORS,
+  neon: [
+    null,
+    '#00e5ff', // I
+    '#fff700', // O
+    '#e040fb', // T
+    '#00e676', // S
+    '#ff1744', // Z
+    '#2979ff', // J
+    '#ff9100', // L
+  ],
+  pastel: [
+    null,
+    '#aee7ea', // I
+    '#fff2b2', // O
+    '#dcb8ea', // T
+    '#bfe7c2', // S
+    '#f3b8b8', // Z
+    '#bcd8f7', // J
+    '#f7cda3', // L
+  ],
+  pixel: COLORS,
+};
+const SKIN_NAMES = Object.keys(SKIN_PALETTES);
+const NEON_ACCENT = SKIN_PALETTES.neon[1];
+
 const PIECES = [
   null,
   [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I
@@ -51,12 +78,15 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 const THEME_KEY = 'tetris-theme';
+const SKIN_KEY = 'tetris-skin';
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridLineColor;
 let linesUntilPowerup, freezeUntil;
+let currentSkin = 'retro';
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -246,21 +276,100 @@ function updateHUD() {
   levelEl.textContent = level;
 }
 
+function drawRoundedRectPath(context, x, y, w, h, r) {
+  const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+  context.beginPath();
+  context.moveTo(x + rad, y);
+  context.arcTo(x + w, y, x + w, y + h, rad);
+  context.arcTo(x + w, y + h, x, y + h, rad);
+  context.arcTo(x, y + h, x, y, rad);
+  context.arcTo(x, y, x + w, y, rad);
+  context.closePath();
+}
+
+function drawPixelTexture(context, px, py, pw, ph, size) {
+  // Plain (non-rounded) cell body, so squares can be clamped to the block
+  // bounds directly instead of paying for a save/clip/restore per block.
+  const cell = Math.max(2, Math.floor(size / 6));
+  context.fillStyle = 'rgba(0,0,0,0.14)';
+  let rowToggle = false;
+  for (let yy = py; yy < py + ph; yy += cell) {
+    const h = Math.min(cell, py + ph - yy);
+    let shade = rowToggle;
+    for (let xx = px; xx < px + pw; xx += cell) {
+      if (shade) {
+        const w = Math.min(cell, px + pw - xx);
+        context.fillRect(xx, yy, w, h);
+      }
+      shade = !shade;
+    }
+    rowToggle = !rowToggle;
+  }
+}
+
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const palette = SKIN_PALETTES[currentSkin] || COLORS;
+  const color = palette[colorIndex] || COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  context.shadowBlur = 0;
+
+  const px = x * size + 1;
+  const py = y * size + 1;
+  const pw = size - 2;
+  const ph = size - 2;
+
+  if (currentSkin === 'pastel') {
+    context.fillStyle = color;
+    drawRoundedRectPath(context, px, py, pw, ph, 6);
+    context.fill();
+    // Clip the highlight to the body's rounded silhouette so it can't
+    // overhang the rounded top corners (they'd otherwise use different
+    // effective radii since the highlight strip is much shorter than pw).
+    context.save();
+    drawRoundedRectPath(context, px, py, pw, ph, 6);
+    context.clip();
+    context.fillStyle = 'rgba(255,255,255,0.3)';
+    context.fillRect(px, py, pw, 4);
+    context.restore();
+  } else {
+    if (currentSkin === 'neon') {
+      context.shadowBlur = 14;
+      context.shadowColor = color;
+    }
+    context.fillStyle = color;
+    context.fillRect(px, py, pw, ph);
+    if (currentSkin === 'neon') {
+      // Glow only the body fill; skip it for the thin highlight strip to
+      // halve the per-block shadow cost (shadowBlur is expensive at 60fps).
+      context.shadowBlur = 0;
+    }
+    // highlight
+    context.fillStyle = 'rgba(255,255,255,0.12)';
+    context.fillRect(px, py, pw, 4);
+  }
+
+  if (currentSkin === 'pixel') {
+    drawPixelTexture(context, px, py, pw, ph, size);
+  }
+
+  context.shadowBlur = 0;
   context.globalAlpha = 1;
 }
 
 function drawGrid() {
-  ctx.strokeStyle = gridLineColor;
-  ctx.lineWidth = 0.5;
+  const neon = currentSkin === 'neon';
+  ctx.save();
+  if (neon) {
+    ctx.strokeStyle = NEON_ACCENT;
+    ctx.lineWidth = 0.75;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = NEON_ACCENT;
+    ctx.globalAlpha = 0.35;
+  } else {
+    ctx.strokeStyle = gridLineColor;
+    ctx.lineWidth = 0.5;
+  }
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
     ctx.moveTo(c * BLOCK, 0);
@@ -273,6 +382,7 @@ function drawGrid() {
     ctx.lineTo(COLS * BLOCK, r * BLOCK);
     ctx.stroke();
   }
+  ctx.restore();
 }
 
 function drawPowerupOverlay(context, piece, size, offX, offY) {
@@ -360,6 +470,20 @@ function toggleTheme() {
   applyTheme(isLight ? 'dark' : 'light');
 }
 
+function applySkin(skin) {
+  currentSkin = SKIN_NAMES.includes(skin) ? skin : 'retro';
+  skinSelect.value = currentSkin;
+  localStorage.setItem(SKIN_KEY, currentSkin);
+}
+
+function handleSkinChange() {
+  applySkin(skinSelect.value);
+  // Redraw immediately so the change is visible without waiting on the RAF loop
+  // (which is stopped while paused or after game over).
+  if (next) drawNext();
+  if ((paused || gameOver) && current) draw();
+}
+
 function togglePause() {
   if (gameOver) return;
   paused = !paused;
@@ -397,6 +521,7 @@ function loop(ts) {
 
 function init() {
   applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
+  applySkin(localStorage.getItem(SKIN_KEY) || 'retro');
   board = createBoard();
   score = 0;
   lines = 0;
@@ -443,5 +568,6 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
+skinSelect.addEventListener('change', handleSkinChange);
 
 init();
